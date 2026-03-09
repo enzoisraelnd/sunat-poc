@@ -1,0 +1,243 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Factoring Service - SUNAT SIRE Invoice Consultation
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Architectures: [x86_64]
+    MemorySize: 256
+    Timeout: 90
+    Environment:
+      Variables:
+        CLIENTS_TABLE: !Ref ClientsTable
+        TOKENS_CACHE_TABLE: !Ref TokensCacheTable
+        INVOICES_CACHE_TABLE: !Ref InvoicesCacheTable
+        S3_BUCKET: !Ref SireDownloadsBucket
+        NOTIFICATION_EMAIL: !Ref NotificationEmail
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+
+Parameters:
+  NotificationEmail:
+    Type: String
+    Description: Email address to notify when a new onboarding is received
+    Default: "team@example.com"
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+
+Resources:
+
+  # ─── API Gateway ───────────────────────────────────────────────────────────
+
+  FactoringApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "factoring-api-${Environment}"
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+        AllowOrigin: "'*'"
+
+  # ─── Lambdas ───────────────────────────────────────────────────────────────
+
+  OnboardingCreateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "factoring-onboarding-create-${Environment}"
+      CodeUri: dist/handlers/
+      Handler: onboarding-create.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClientsTable
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:CreateSecret
+                - secretsmanager:PutSecretValue
+                - secretsmanager:UpdateSecret
+              Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FactoringApi
+            Path: /onboarding
+            Method: POST
+
+  OnboardingStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "factoring-onboarding-status-${Environment}"
+      CodeUri: dist/handlers/
+      Handler: onboarding-status.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ClientsTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FactoringApi
+            Path: /onboarding/{id}/status
+            Method: GET
+
+  OnboardingActivateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "factoring-onboarding-activate-${Environment}"
+      CodeUri: dist/handlers/
+      Handler: onboarding-activate.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClientsTable
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:PutSecretValue
+                - secretsmanager:UpdateSecret
+              Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FactoringApi
+            Path: /onboarding/{id}/activate
+            Method: POST
+
+  InvoiceQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "factoring-invoice-query-${Environment}"
+      CodeUri: dist/handlers/
+      Handler: invoice-query.handler
+      Timeout: 90
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClientsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TokensCacheTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InvoicesCacheTable
+        - S3WritePolicy:
+            BucketName: !Ref SireDownloadsBucket
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FactoringApi
+            Path: /clients/{ruc}/invoices
+            Method: GET
+
+  InvoiceForceSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "factoring-invoice-force-sync-${Environment}"
+      CodeUri: dist/handlers/
+      Handler: invoice-force-sync.handler
+      Timeout: 90
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClientsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TokensCacheTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InvoicesCacheTable
+        - S3WritePolicy:
+            BucketName: !Ref SireDownloadsBucket
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FactoringApi
+            Path: /clients/{ruc}/invoices/sync
+            Method: GET
+
+  # ─── DynamoDB Tables ───────────────────────────────────────────────────────
+
+  ClientsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "factoring-clients-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ruc
+          AttributeType: S
+        - AttributeName: onboarding_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ruc
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: onboarding_id-index
+          KeySchema:
+            - AttributeName: onboarding_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  TokensCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "factoring-tokens-cache-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ruc
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ruc
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  InvoicesCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "factoring-invoices-cache-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ruc_period
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ruc_period
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ─── S3 ────────────────────────────────────────────────────────────────────
+
+  SireDownloadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "factoring-sire-downloads-${Environment}-${AWS::AccountId}"
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldDownloads
+            Status: Enabled
+            ExpirationInDays: 90
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${FactoringApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+  ClientsTableName:
+    Value: !Ref ClientsTable
+  InvoicesCacheTableName:
+    Value: !Ref InvoicesCacheTable

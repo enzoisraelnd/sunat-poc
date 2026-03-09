@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# SAM build artifacts
+.aws-sam/
+
+# Environment & secrets — never commit
+.env
+.env.*
+*.env
+
+# Postman environments with secrets filled in
+postman/prod.postman_environment.json
+postman/dev.postman_environment.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log

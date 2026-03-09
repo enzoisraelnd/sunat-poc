@@ -1,0 +1,307 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Factoring Service — SUNAT SIRE",
+    "description": "API para consulta de facturas de venta aceptadas de posibles clientes para factoring, integrando con SUNAT SIRE.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "{{base_url}}",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Onboarding",
+      "description": "Flujo de registro de nuevos clientes",
+      "item": [
+        {
+          "name": "1. Crear onboarding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ruc\": \"{{ruc}}\",\n  \"company_name\": \"{{company_name}}\",\n  \"contact_email\": \"{{contact_email}}\",\n  \"sol_username\": \"{{sol_username}}\",\n  \"sol_password\": \"{{sol_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/onboarding",
+              "host": ["{{base_url}}"],
+              "path": ["onboarding"]
+            },
+            "description": "Registra un nuevo cliente para factoring. Guarda las credenciales SOL en Secrets Manager y notifica al equipo para completar la activación en el portal SUNAT."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('onboarding_id', body.onboarding_id);",
+                  "    pm.collectionVariables.set('ruc', body.ruc);",
+                  "    console.log('onboarding_id saved:', body.onboarding_id);",
+                  "}",
+                  "",
+                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Has onboarding_id', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('onboarding_id');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "201 - Creado exitosamente",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ruc\": \"20100070970\",\n  \"company_name\": \"EMPRESA EJEMPLO SAC\",\n  \"contact_email\": \"contacto@empresa.com\",\n  \"sol_username\": \"USUARIOSOL\",\n  \"sol_password\": \"clave123\"\n}"
+                },
+                "url": { "raw": "{{base_url}}/onboarding" }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"onboarding_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"ruc\": \"20100070970\",\n  \"company_name\": \"EMPRESA EJEMPLO SAC\",\n  \"status\": \"PENDING\",\n  \"message\": \"Onboarding registered. Our team will activate your account after completing SUNAT portal setup.\"\n}"
+            },
+            {
+              "name": "400 - RUC inválido",
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"error\": \"Invalid RUC format or check digit\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "2. Consultar estado de onboarding",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/onboarding/{{onboarding_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["onboarding", "{{onboarding_id}}", "status"]
+            },
+            "description": "Consulta el estado actual del proceso de onboarding. Estados posibles: PENDING, ACTIVE, SUSPENDED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Has status field', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('status');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 - PENDING",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"onboarding_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"ruc\": \"20100070970\",\n  \"company_name\": \"EMPRESA EJEMPLO SAC\",\n  \"status\": \"PENDING\",\n  \"onboarding_date\": \"2025-01-15T10:30:00.000Z\",\n  \"activation_date\": null\n}"
+            },
+            {
+              "name": "200 - ACTIVE",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"onboarding_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"ruc\": \"20100070970\",\n  \"company_name\": \"EMPRESA EJEMPLO SAC\",\n  \"status\": \"ACTIVE\",\n  \"onboarding_date\": \"2025-01-15T10:30:00.000Z\",\n  \"activation_date\": \"2025-01-15T11:00:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "3. Activar cliente (interno — equipo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{sunat_client_id}}\",\n  \"client_secret\": \"{{sunat_client_secret}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/onboarding/{{onboarding_id}}/activate",
+              "host": ["{{base_url}}"],
+              "path": ["onboarding", "{{onboarding_id}}", "activate"]
+            },
+            "description": "⚠️ Endpoint de uso interno del equipo.\n\nLuego de que el equipo registra la aplicación en api.sunat.gob.pe con las credenciales SOL del cliente, sube el client_id y client_secret obtenidos. Esto activa el cliente y habilita las consultas de facturas."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Status is ACTIVE', () => {",
+                  "    pm.expect(pm.response.json().status).to.eql('ACTIVE');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 - Activado",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"ruc\": \"20100070970\",\n  \"company_name\": \"EMPRESA EJEMPLO SAC\",\n  \"status\": \"ACTIVE\",\n  \"activation_date\": \"2025-01-15T11:00:00.000Z\"\n}"
+            },
+            {
+              "name": "409 - Ya activo",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"error\": \"Client is already active\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Facturas",
+      "description": "Consulta de facturas aceptadas por periodo",
+      "item": [
+        {
+          "name": "Consultar facturas (con cache)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/clients/{{ruc}}/invoices?period={{period}}",
+              "host": ["{{base_url}}"],
+              "path": ["clients", "{{ruc}}", "invoices"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "Periodo en formato YYYYMM (ej: 202501)"
+                }
+              ]
+            },
+            "description": "Consulta las facturas de venta aceptadas de un cliente para un periodo mensual.\n\n- Si existe cache válido (< 24h), responde inmediatamente con `source: \"cache\"`\n- Si no hay cache, ejecuta el flujo asíncrono contra SUNAT SIRE:\n  1. Crea solicitud → obtiene ticket\n  2. Polling de estado hasta que sea `Atendido`\n  3. Descarga y parsea el ZIP con los comprobantes\n  4. Filtra solo facturas (tipo 01) aceptadas (estado 0)\n  5. Guarda en cache para próximas consultas"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Has invoices array', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('invoices').that.is.an('array');",
+                  "});",
+                  "pm.test('Source is cache or sunat', () => {",
+                  "    pm.expect(['cache', 'sunat']).to.include(pm.response.json().source);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "console.log(`Source: ${body.source} | Invoices: ${body.total_invoices} | Total: ${body.total_amount} ${body.invoices[0]?.currency ?? ''}`);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 - Desde cache",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"ruc\": \"20100070970\",\n  \"company_name\": \"EMPRESA EJEMPLO SAC\",\n  \"period\": \"202501\",\n  \"total_invoices\": 3,\n  \"total_amount\": 35400.00,\n  \"source\": \"cache\",\n  \"query_date\": \"2025-01-20T09:15:00.000Z\",\n  \"invoices\": [\n    {\n      \"series_number\": \"F001-00001234\",\n      \"issue_date\": \"2025-01-05\",\n      \"buyer_ruc\": \"20512345678\",\n      \"buyer_company_name\": \"CLIENTE CORP SAC\",\n      \"base_amount\": 10000.00,\n      \"igv\": 1800.00,\n      \"total_amount\": 11800.00,\n      \"currency\": \"PEN\",\n      \"status\": \"ACCEPTED\"\n    },\n    {\n      \"series_number\": \"F001-00001235\",\n      \"issue_date\": \"2025-01-12\",\n      \"buyer_ruc\": \"20698765432\",\n      \"buyer_company_name\": \"DISTRIBUIDORA XYZ SAC\",\n      \"base_amount\": 20000.00,\n      \"igv\": 3600.00,\n      \"total_amount\": 23600.00,\n      \"currency\": \"PEN\",\n      \"status\": \"ACCEPTED\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "200 - Desde SUNAT",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"ruc\": \"20100070970\",\n  \"company_name\": \"EMPRESA EJEMPLO SAC\",\n  \"period\": \"202501\",\n  \"total_invoices\": 3,\n  \"total_amount\": 35400.00,\n  \"source\": \"sunat\",\n  \"query_date\": \"2025-01-20T09:20:00.000Z\",\n  \"invoices\": [\n    {\n      \"series_number\": \"F001-00001234\",\n      \"issue_date\": \"2025-01-05\",\n      \"buyer_ruc\": \"20512345678\",\n      \"buyer_company_name\": \"CLIENTE CORP SAC\",\n      \"base_amount\": 10000.00,\n      \"igv\": 1800.00,\n      \"total_amount\": 11800.00,\n      \"currency\": \"PEN\",\n      \"status\": \"ACCEPTED\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "403 - Cliente no activo",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"error\": \"Client is not active. Current status: PENDING\"\n}"
+            },
+            {
+              "name": "502 - Error SUNAT",
+              "status": "Bad Gateway",
+              "code": 502,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"error\": \"Failed to retrieve invoices from SUNAT\",\n  \"details\": \"SIRE ticket rejected: Período no válido\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Consultar facturas (forzar SUNAT)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/clients/{{ruc}}/invoices/sync?period={{period}}",
+              "host": ["{{base_url}}"],
+              "path": ["clients", "{{ruc}}", "invoices", "sync"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "{{period}}",
+                  "description": "Periodo en formato YYYYMM (ej: 202501)"
+                }
+              ]
+            },
+            "description": "Igual que la consulta normal pero **ignora el cache** y siempre consulta directamente a SUNAT SIRE.\n\nÚtil cuando el área comercial necesita datos actualizados del mismo periodo (por ejemplo, si el cliente emitió nuevas facturas en el mismo mes).\n\n⚠️ Esta llamada ejecuta el flujo completo contra SUNAT y puede tardar entre 10–90 segundos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Source is sunat (not cache)', () => {",
+                  "    pm.expect(pm.response.json().source).to.eql('sunat');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}
