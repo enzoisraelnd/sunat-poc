@@ -2,7 +2,6 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { v4 as uuidv4 } from 'uuid';
 import { putClient } from '../services/dynamodb';
 import { createCredentials } from '../services/secrets';
-import { notifyNewOnboarding } from '../services/ses';
 import { isValidRuc, buildResponse, errorResponse } from '../utils/validation';
 import { logger } from '../utils/logger';
 
@@ -70,8 +69,6 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     logger.error('Failed to save client to DynamoDB', err);
     return errorResponse(500, 'Failed to register client');
   }
-
-  await notifyNewOnboarding({ ruc, company_name, contact_email, onboarding_id });
 
   logger.info('Onboarding created', { ruc, onboarding_id });
 

@@ -1,0 +1,42 @@
+version = 0.1
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entorno: DEV  (sam deploy --config-env dev)
+# ─────────────────────────────────────────────────────────────────────────────
+[dev.deploy.parameters]
+stack_name         = "factoring-service-dev"
+region             = "us-east-1"
+s3_bucket          = "toqueadev-factoring-deployments"
+s3_prefix          = "sam-factoring-dev"
+capabilities       = "CAPABILITY_AUTO_EXPAND"
+confirm_changeset  = true
+fail_on_empty_changeset = false
+
+parameter_overrides = [
+  "Environment=dev",
+  "LambdaRoleArn=arn:aws:iam::888577029900:role/rol-lending-lambda"
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entorno: PROD  (sam deploy --config-env prod)
+# ─────────────────────────────────────────────────────────────────────────────
+[prod.deploy.parameters]
+stack_name         = "factoring-service-prod"
+region             = "<COMPLETAR: ej. sa-east-1>"
+s3_bucket          = "<COMPLETAR: bucket-artefactos-existente-prod>"
+s3_prefix          = "factoring-service/prod"
+capabilities       = "CAPABILITY_AUTO_EXPAND"
+confirm_changeset  = true
+fail_on_empty_changeset = false
+
+parameter_overrides = [
+  "Environment=prod",
+  "LambdaRoleArn=<COMPLETAR: arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME>"
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Build (compartido entre entornos)
+# ─────────────────────────────────────────────────────────────────────────────
+[default.build.parameters]
+cached = true
+parallel = true

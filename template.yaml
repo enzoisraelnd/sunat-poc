@@ -8,24 +8,23 @@ Globals:
     Architectures: [x86_64]
     MemorySize: 256
     Timeout: 90
+    CodeUri: .
     Environment:
       Variables:
         CLIENTS_TABLE: !Ref ClientsTable
         TOKENS_CACHE_TABLE: !Ref TokensCacheTable
         INVOICES_CACHE_TABLE: !Ref InvoicesCacheTable
         S3_BUCKET: !Ref SireDownloadsBucket
-        NOTIFICATION_EMAIL: !Ref NotificationEmail
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
 
 Parameters:
-  NotificationEmail:
-    Type: String
-    Description: Email address to notify when a new onboarding is received
-    Default: "team@example.com"
   Environment:
     Type: String
     Default: dev
     AllowedValues: [dev, prod]
+  LambdaRoleArn:
+    Type: String
+    Description: ARN del IAM Role existente que se asignará a todas las funciones Lambda
 
 Resources:
 
@@ -47,25 +46,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "factoring-onboarding-create-${Environment}"
-      CodeUri: dist/handlers/
-      Handler: onboarding-create.handler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ClientsTable
-        - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
-        - Statement:
-            - Effect: Allow
-              Action:
-                - secretsmanager:CreateSecret
-                - secretsmanager:PutSecretValue
-                - secretsmanager:UpdateSecret
-              Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
-            - Effect: Allow
-              Action:
-                - ses:SendEmail
-                - ses:SendRawEmail
-              Resource: "*"
+      Handler: src/handlers/onboarding-create.handler
+      Role: !Ref LambdaRoleArn
       Events:
         ApiEvent:
           Type: Api
@@ -73,16 +55,20 @@ Resources:
             RestApiId: !Ref FactoringApi
             Path: /onboarding
             Method: POST
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        EntryPoints:
+          - src/handlers/onboarding-create.ts
 
   OnboardingStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "factoring-onboarding-status-${Environment}"
-      CodeUri: dist/handlers/
-      Handler: onboarding-status.handler
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref ClientsTable
+      Handler: src/handlers/onboarding-status.handler
+      Role: !Ref LambdaRoleArn
       Events:
         ApiEvent:
           Type: Api
@@ -90,24 +76,20 @@ Resources:
             RestApiId: !Ref FactoringApi
             Path: /onboarding/{id}/status
             Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        EntryPoints:
+          - src/handlers/onboarding-status.ts
 
   OnboardingActivateFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "factoring-onboarding-activate-${Environment}"
-      CodeUri: dist/handlers/
-      Handler: onboarding-activate.handler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ClientsTable
-        - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
-        - Statement:
-            - Effect: Allow
-              Action:
-                - secretsmanager:PutSecretValue
-                - secretsmanager:UpdateSecret
-              Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
+      Handler: src/handlers/onboarding-activate.handler
+      Role: !Ref LambdaRoleArn
       Events:
         ApiEvent:
           Type: Api
@@ -115,25 +97,20 @@ Resources:
             RestApiId: !Ref FactoringApi
             Path: /onboarding/{id}/activate
             Method: POST
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        EntryPoints:
+          - src/handlers/onboarding-activate.ts
 
   InvoiceQueryFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "factoring-invoice-query-${Environment}"
-      CodeUri: dist/handlers/
-      Handler: invoice-query.handler
-      Timeout: 90
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ClientsTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TokensCacheTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref InvoicesCacheTable
-        - S3WritePolicy:
-            BucketName: !Ref SireDownloadsBucket
-        - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
+      Handler: src/handlers/invoice-query.handler
+      Role: !Ref LambdaRoleArn
       Events:
         ApiEvent:
           Type: Api
@@ -141,25 +118,20 @@ Resources:
             RestApiId: !Ref FactoringApi
             Path: /clients/{ruc}/invoices
             Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        EntryPoints:
+          - src/handlers/invoice-query.ts
 
   InvoiceForceSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "factoring-invoice-force-sync-${Environment}"
-      CodeUri: dist/handlers/
-      Handler: invoice-force-sync.handler
-      Timeout: 90
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ClientsTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TokensCacheTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref InvoicesCacheTable
-        - S3WritePolicy:
-            BucketName: !Ref SireDownloadsBucket
-        - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:sunat/*"
+      Handler: src/handlers/invoice-force-sync.handler
+      Role: !Ref LambdaRoleArn
       Events:
         ApiEvent:
           Type: Api
@@ -167,6 +139,13 @@ Resources:
             RestApiId: !Ref FactoringApi
             Path: /clients/{ruc}/invoices/sync
             Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        EntryPoints:
+          - src/handlers/invoice-force-sync.ts
 
   # ─── DynamoDB Tables ───────────────────────────────────────────────────────
 
